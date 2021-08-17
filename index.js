@@ -14,5 +14,5 @@ app.get('/status', (req, res) => {
 
 
 app.listen(port, () => {
-  console.log(`Example app listening at the http://localhost:${port}`)
+  console.log(`Example app listening at the2 http://localhost:${port}`)
 })
