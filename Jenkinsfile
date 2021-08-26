@@ -1,45 +1,61 @@
 pipeline {
     agent any
-    tools {nodejs "node16" }
     environment {
-        NODE_ENV='production'
+        registry = "559247606700.dkr.ecr.us-east-1.amazonaws.com/dockerpipeline"
+        image = 'dockerpipeline'
     }
-    
-  
+   
     stages {
-        stage('source') {
+        stage('Cloning Git') {
             steps {
-               git 'https://github.com/sd031/aws_codebuild_codedeploy_nodeJs_demo.git'
-               sh 'cat index.js'
+              git 'https://github.com/nbnssrikanth/aws_codebuild_codedeploy_nodeJs_demo'
             }
-            
         }
-        
-         stage('build') {
-             environment{
-                 NODE_ENV='StagingGitTest'
-             }
-             
-            
-            steps {
-             echo NODE_ENV
-             withCredentials([string(credentialsId: 'e8f8ff88-49e0-433a-928d-36a518cd30d6', variable: 'secver')]) {
-                // some block
-                echo secver
-            }
-                         sh 'npm install'
-            }
-            
+ 
+
+// Building Docker images
+    stage('Building image') {
+      steps{
+        script {
+          dockerImage = docker.build registry
         }
-        
-         stage('saveArtifact') {
-            steps {
-              archiveArtifacts artifacts: '**', followSymlinks: false
-            }
-            
-        }
-        
-        
-        
+      }
     }
+   
+    // Uploading Docker images into AWS ECR
+    stage('Pushing to ECR') {
+     steps{  
+         script {
+                sh 'aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 559247606700.dkr.ecr.us-east-1.amazonaws.com'
+                sh 'docker push 559247606700.dkr.ecr.us-east-1.amazonaws.com/dockerpipeline:latest'
+         }
+        }
+      }
+        stage('stop previous containers') {
+         steps {
+            sh 'docker ps -f name=myreactjs -q | xargs --no-run-if-empty docker container stop'
+            sh 'docker container ls -a -fname=myreactjs -q | xargs -r docker container rm'
+         }
+       }
+
+      
+    stage('Docker Run') {
+     steps{
+         script {
+                sh 'docker run -d -p 3000:3000 --rm --name myreactjs 559247606700.dkr.ecr.us-east-1.amazonaws.com/dockerpipeline'
+            }
+      }
+    }
+    }
+
+
+  post
+  {
+    always
+    {
+    sh 'docker rmi $(docker images --filter "dangling=true" -q --no-trunc) 2>/dev/null'
+    }
+ }
+
 }
+
